@@ -1,8 +1,8 @@
-extern crate regex;
 extern crate fancy_regex;
+extern crate regex;
 
-use regex::Regex;
 use fancy_regex::Regex as FancyRegex;
+use regex::Regex;
 
 /**
  * Default configs.
@@ -16,10 +16,10 @@ pub struct Options {
     sensitive: bool,
     end: bool,
     start: bool,
-    ends_with: Vec<String>
+    ends_with: Vec<String>,
 }
 impl Default for Options {
-    fn default () -> Options {
+    fn default() -> Options {
         Options {
             delimiter: DEFAULT_DELIMITER,
             whitelist: Vec::new(),
@@ -27,7 +27,7 @@ impl Default for Options {
             sensitive: false,
             end: true,
             start: true,
-            ends_with: Vec::new()
+            ends_with: Vec::new(),
         }
     }
 }
@@ -39,19 +39,19 @@ pub struct Token {
     delimiter: char,
     optional: bool,
     repeat: bool,
-    pattern: String
+    pattern: String,
 }
 
 #[derive(Debug)]
 pub struct Match {
-    name: String,
-    value: String
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct Container {
     token: Option<Token>,
-    path: String
+    path: String,
 }
 
 /**
@@ -60,7 +60,7 @@ pub struct Container {
  * @param  {String} string
  * @return {String}
  */
-fn escape_string (string: String) -> String {
+fn escape_string(string: String) -> String {
     let re = Regex::new(r"([.+*?=^!:${}()[\]|/\\]])").unwrap();
     re.replace_all(string.as_str(), r"\$1").into_owned()
 }
@@ -71,7 +71,7 @@ fn escape_string (string: String) -> String {
  * @param  {String} group
  * @return {String}
  */
-fn escape_group (group: String) -> String {
+fn escape_group(group: String) -> String {
     let re = Regex::new(r"([=!:$/()])").unwrap();
     re.replace_all(group.as_str(), r"\$1").into_owned()
 }
@@ -82,7 +82,7 @@ fn escape_group (group: String) -> String {
  * @param  {Options} options
  * @return {String}
  */
-fn flags (route: &str, options: Options) -> String {
+fn flags(route: &str, options: Options) -> String {
     if !options.sensitive {
         format!("(?i){}", route)
     } else {
@@ -97,27 +97,32 @@ fn flags (route: &str, options: Options) -> String {
  * @param  {Options} options
  * @return (Vec<Container>)
  */
-pub fn parse (text: &str, options: Options) -> Vec<Container> {
+pub fn parse(text: &str, options: Options) -> Vec<Container> {
     let default_delimiter: char = options.delimiter;
     let whitelist: &Vec<String> = &options.whitelist;
-    let path_regexp: Regex = Regex::new(vec![
-        // Match escaped characters that would otherwise appear in future matches.
-        // This allows the user to escape special characters that won't transform.
-        r"(\\.)",
-        // Match Express-style parameters and un-named parameters with a prefix
-        // and optional suffixes. Matches appear as:
-        //
-        // ":test(\\d+)?" => ["test", "\d+", NONE, "?"]
-        // "(\\d+)"  => [NONE, NONE, "\d+", NONE]
-        r"(?::(\w+)(?:\(((?:\\.|[^\\()])+)\))?|\(((?:\\.|[^\\()])+)\))([+*?])?"
-    ].join("|").as_str()).unwrap();
+    let path_regexp: Regex = Regex::new(
+        vec![
+            // Match escaped characters that would otherwise appear in future matches.
+            // This allows the user to escape special characters that won't transform.
+            r"(\\.)",
+            // Match Express-style parameters and un-named parameters with a prefix
+            // and optional suffixes. Matches appear as:
+            //
+            // ":test(\\d+)?" => ["test", "\d+", NONE, "?"]
+            // "(\\d+)"  => [NONE, NONE, "\d+", NONE]
+            r"(?::(\w+)(?:\(((?:\\.|[^\\()])+)\))?|\(((?:\\.|[^\\()])+)\))([+*?])?",
+        ]
+        .join("|")
+        .as_str(),
+    )
+    .unwrap();
     let mut index = 0;
     let mut key = -1;
     let mut path = String::new();
     let mut path_escaped = false;
     let mut containers: Vec<Container> = vec![];
 
-    fn unwrap_match_to_str (m: Option<regex::Match>) -> &str {
+    fn unwrap_match_to_str(m: Option<regex::Match>) -> &str {
         if m != None {
             m.unwrap().as_str()
         } else {
@@ -152,7 +157,7 @@ pub fn parse (text: &str, options: Options) -> Vec<Container> {
 
         if !path_escaped && path.len() > 0 {
             let k = path.len();
-            let c = String::from(path.get(k-1..k).unwrap());
+            let c = String::from(path.get(k - 1..k).unwrap());
             let matches: bool = if whitelist.len() > 0 {
                 whitelist.into_iter().find(|&x| x == &c) != None
             } else {
@@ -167,10 +172,7 @@ pub fn parse (text: &str, options: Options) -> Vec<Container> {
 
         // Push the current path onto the tokens.
         if path != "" {
-            containers.push(Container {
-                path,
-                token: None
-            });
+            containers.push(Container { path, token: None });
             path = String::new();
             path_escaped = false;
         }
@@ -211,20 +213,17 @@ pub fn parse (text: &str, options: Options) -> Vec<Container> {
                     } else {
                         vec![delimiter, default_delimiter].into_iter().collect()
                     };
-                    
+
                     format!(r"[^\{}]+?", escape_string(pattern_delimiter))
-                }
-            })
+                },
+            }),
         });
     }
 
     // Push any remaining characters.
     if path.len() > 0 || index < text.len() {
         path.push_str(text.get(index..text.len()).unwrap());
-        containers.push(Container {
-            path,
-            token: None
-        });
+        containers.push(Container { path, token: None });
     }
 
     containers
@@ -237,16 +236,17 @@ pub fn parse (text: &str, options: Options) -> Vec<Container> {
  * @param  {Options} options
  * @return {FancyRegex}
  */
-pub fn to_regexp (containers: &Vec<Container>, options: Options) -> FancyRegex {
+pub fn to_regexp(containers: &Vec<Container>, options: Options) -> FancyRegex {
     let strict = options.strict;
     let start = options.start;
     let end = options.end;
     let delimiter = options.delimiter;
     let ends_with = if options.ends_with.len() > 0 {
         let mut _ends_with_vec = &options.ends_with;
-        let mut _ends_with: Vec<String> = _ends_with_vec.into_iter().map(|s| {
-            escape_string(s.to_string())
-        }).collect();
+        let mut _ends_with: Vec<String> = _ends_with_vec
+            .into_iter()
+            .map(|s| escape_string(s.to_string()))
+            .collect();
         _ends_with.push(String::from("$"));
         _ends_with.join("|")
     } else {
@@ -261,14 +261,19 @@ pub fn to_regexp (containers: &Vec<Container>, options: Options) -> FancyRegex {
     // Iterate over the containers and create our regexp string.
     for i in 0..containers.len() {
         let container = &containers[i];
-        
+
         if !container.path.is_empty() {
             route.push_str(escape_string(container.path.to_string()).as_str());
         } else {
             let token = container.token.as_ref().unwrap();
             let prefix = String::from(token.prefix.as_str());
             let capture = if token.repeat == true {
-                format!("(?:{})(?:{}(?:{}))*", token.pattern.as_str(), escape_string(token.delimiter.to_string()).as_str(), token.pattern.as_str())
+                format!(
+                    "(?:{})(?:{}(?:{}))*",
+                    token.pattern.as_str(),
+                    escape_string(token.delimiter.to_string()).as_str(),
+                    token.pattern.as_str()
+                )
             } else {
                 format!("{}", token.pattern.as_str())
             };
@@ -277,10 +282,19 @@ pub fn to_regexp (containers: &Vec<Container>, options: Options) -> FancyRegex {
                 if token.prefix != "" {
                     route.push_str(format!("({})", capture.as_str()).as_str());
                 } else {
-                    route.push_str(format!("(?:{}({}))?", escape_string(prefix).as_str(), capture.as_str()).as_str());
+                    route.push_str(
+                        format!(
+                            "(?:{}({}))?",
+                            escape_string(prefix).as_str(),
+                            capture.as_str()
+                        )
+                        .as_str(),
+                    );
                 }
             } else {
-                route.push_str(format!("{}({})", escape_string(prefix).as_str(), capture.as_str()).as_str());
+                route.push_str(
+                    format!("{}({})", escape_string(prefix).as_str(), capture.as_str()).as_str(),
+                );
             }
         }
     }
@@ -298,18 +312,30 @@ pub fn to_regexp (containers: &Vec<Container>, options: Options) -> FancyRegex {
     } else {
         let last_container: &Container = containers.last().unwrap();
         let is_end_delimited = if !last_container.path.is_empty() {
-            let last_path_char = last_container.path.get(last_container.path.len() - 1..last_container.path.len()).unwrap();
+            let last_path_char = last_container
+                .path
+                .get(last_container.path.len() - 1..last_container.path.len())
+                .unwrap();
             last_path_char.to_string()
         } else {
             String::new()
         };
 
         if !strict {
-            route.push_str(format!("(?:{}(?={}))?", escape_string(delimiter.to_string()), ends_with).as_str());
+            route.push_str(
+                format!(
+                    "(?:{}(?={}))?",
+                    escape_string(delimiter.to_string()),
+                    ends_with
+                )
+                .as_str(),
+            );
         }
 
         if is_end_delimited.is_empty() {
-            route.push_str(format!("(?={}|{})", escape_string(delimiter.to_string()), ends_with).as_str());
+            route.push_str(
+                format!("(?={}|{})", escape_string(delimiter.to_string()), ends_with).as_str(),
+            );
         }
     }
 
@@ -326,14 +352,15 @@ pub fn to_regexp (containers: &Vec<Container>, options: Options) -> FancyRegex {
  * @param  {Vec<Container>} containers
  * @return {Vec<Match>}
  */
-pub fn match_str (text: &str, regexp: FancyRegex, containers: Vec<Container>) -> Vec<Match> {
+pub fn match_str(text: &str, regexp: FancyRegex, containers: Vec<Container>) -> Vec<Match> {
     let mut matches: Vec<Match> = vec![];
 
     if !regexp.is_match(text).unwrap() {
         return matches;
     }
-    
-    let containers: Vec<Container> = containers.into_iter()
+
+    let containers: Vec<Container> = containers
+        .into_iter()
         .filter(|container| container.path == "")
         .collect();
 
@@ -345,11 +372,11 @@ pub fn match_str (text: &str, regexp: FancyRegex, containers: Vec<Container>) ->
                 continue;
             }
 
-            let container = containers.get(i-1).unwrap();
+            let container = containers.get(i - 1).unwrap();
             if let Some(token) = &container.token {
                 matches.push(Match {
                     name: String::from(token.name.as_str()),
-                    value: cap.to_owned()
+                    value: cap.to_owned(),
                 });
             }
         }
